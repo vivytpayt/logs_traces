@@ -1,0 +1,19 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+
+exporters:
+  debug: {}  # больше никаких loglevel
+  zipkin:
+    endpoint: "http://jaeger:9411/api/v2/spans"
+  otlp:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [zipkin, otlp, debug]

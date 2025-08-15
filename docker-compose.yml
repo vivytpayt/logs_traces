@@ -1,0 +1,99 @@
+services:
+  # --- Твои сервисы ---
+  gateway:
+    build: .
+    command: uvicorn gateway:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - processor
+      - otel-collector
+      - vector
+    networks: [app]
+
+  processor:
+    build: .
+    command: uvicorn processor:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - database
+      - otel-collector
+      - vector
+    networks: [app]
+
+  database:
+    build: .
+    command: uvicorn database:app --host 0.0.0.0 --port 8002 --reload
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+    depends_on:
+      - otel-collector
+      - vector
+    networks: [app]
+
+  # --- OpenTelemetry Collector ---
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ./otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4318:4318"
+    networks: [app]
+
+  # --- Vector ---
+  vector:
+    image: timberio/vector:latest-alpine
+    command: ["--config", "/etc/vector/vector.toml"]
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml
+    ports:
+      - "8686:8686"
+    networks: [app]
+
+  # --- Grafana ---
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    networks: [app]
+    depends_on:
+      - loki
+      - tempo
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+
+  # --- Loki ---
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    networks: [app]
+
+  # --- Tempo ---
+  tempo:
+    image: grafana/tempo:latest
+    ports:
+      - "3200:3200"
+      - "9095:9095"
+    volumes:
+      - ./tempo-data:/var/tempo
+      - ./tempo-local.yaml:/etc/tempo-local.yaml
+    command: [ "-config.file=/etc/tempo-local.yaml" ]
+    networks:
+      - app
+
+  # --- Jaeger ---
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+    networks: [app]
+
+networks:
+  app:
+    driver: bridge

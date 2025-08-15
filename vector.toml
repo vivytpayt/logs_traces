@@ -1,0 +1,22 @@
+[sources.otlp]
+type = "opentelemetry"
+
+[sources.otlp.http]
+address = "0.0.0.0:4318"
+
+[sources.otlp.grpc]
+address = "0.0.0.0:0"
+
+[transforms.add_fields]
+type = "remap"
+inputs = ["otlp.logs"]
+source = '''
+.service = get(.attributes, ["service.name"]) ?? "unknown"
+'''
+
+[sinks.loki]
+type = "loki"
+inputs = ["add_fields"]
+endpoint = "http://loki:3100"
+encoding.codec = "json"
+labels.service = "{{ service }}"
